@@ -11,11 +11,6 @@ from moviepy.editor import *
 matplotlib.use("Agg", force=True)
 from matplotlib import pyplot as plt
 
-'''proc = madmom.features.beats.DBNBeatTrackingProcessor(fps=100)
-act = madmom.features.beats.RNNBeatProcessor()('./songs/train1.wav')
-
-beat_times = proc(act)'''
-
 def downloadSongFromYoutube(url):
     if(not os.path.exists("./tempSong")):
         os.mkdir("./tempSong")
