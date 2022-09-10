@@ -9,6 +9,7 @@
 - matplotlib
 - opencv-python
 - pytube
+- just_playback
 
 To convert video to wav file need [ffmpeg](https://ffmpeg.org/download.html).
 
@@ -28,11 +29,11 @@ Use chromagramGenerator.py file to create chromagrams folder, also, this file cr
 > `py chromagramGenerator.py`
 
 This is a complete chromagram generated whit madmom based in 25.jams file.
-![Complete chromagram](./images/25Chroma.png)
+![Complete chromagram](./assets/25Chroma.png)
 
 And this is how chromagrams will be saved in chromagrams folder to load in model. This will be without x and y labels and without padding.
 
-![Chromagram chord](./images/25PartChroma.png)
+![Chromagram chord](./assets/25PartChroma.png)
 
 ## Run model
 Use main.py to run model, this just need chromagrams folder.

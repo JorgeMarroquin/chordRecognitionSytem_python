@@ -1,3 +1,4 @@
+from time import sleep
 import matplotlib
 import numpy as np
 import madmom
@@ -7,6 +8,11 @@ import shutil
 import IPython.display as ipd
 import subprocess
 import pytube
+import json
+import time
+import keyboard
+from just_playback import Playback
+from tqdm import tqdm
 from moviepy.editor import *
 matplotlib.use("Agg", force=True)
 from matplotlib import pyplot as plt
@@ -34,8 +40,9 @@ def generatePartChromagrams(chroma, beatArray, savePath):
     if(not os.path.exists(savePath)):
         os.mkdir(savePath)
 
+    loop = tqdm(total=len(beatArray), position=0, leave=False)
     for index, a in enumerate(beatArray):
-        print(index, len(beatArray))
+        loop.set_description("".format(index))
         if(index == len(beatArray) - 1):
             return
         #Plot and save chromagram pieces
@@ -54,10 +61,61 @@ def generatePartChromagrams(chroma, beatArray, savePath):
         plt.close('all')
         plt.clf()
         plt.cla()
-    
+        loop.update(1)
+    loop.close
+
+def getChords(beats):
+    with open('class_indices.json', 'r') as openfile:
+        json_object = json.load(openfile)
+    class_names = list(json_object.keys())
+    for index, element in enumerate(class_names):
+        class_names[index] = element.replace("_maj", "").replace("_min", "m")
+
+    chords = []
+    new_model = tf.keras.models.load_model('./saved_model')
+
+    loop = tqdm(total=len(beats), position=0, leave=False)
+    for index, chroma  in enumerate(beats[:-1].copy()):
+        
+        chroma_url = "./tempChromagrams/" + str(chroma) + ".png"
+
+        img = tf.keras.utils.load_img(chroma_url, target_size=(480, 640))
+        img_array = tf.keras.utils.img_to_array(img)
+        img_array = tf.expand_dims(img_array, 0)
+
+        predictions = new_model.predict(img_array)
+        score = tf.nn.softmax(predictions[0])
+        
+        loop.set_description((str(class_names[np.argmax(score)]) + " " + "Score: " + str(100 * np.max(score))).format(index))
+        loop.update(1)
+        chords.append(class_names[np.argmax(score)])
+    loop.close
+    return chords
+
+
+def deploySong(beats, chords):
+    beatIndex = 0
+    buffer = ["--", "--", "--", "--"]
+    for index, e in enumerate(buffer):
+        if index < len(chords):
+            buffer[index] = chords[index]
+
+    playback = Playback()
+    playBackclick = Playback()
+    playback.load_file('./tempSong/songTemp.wav')
+    playBackclick.load_file('./assets/click.wav')
+    playback.play()
+    while(beatIndex < len(chords)):
+        if(round(playback.curr_pos, 2) == beats[beatIndex]):
+            print("    " + str(round(playback.curr_pos, 2)) + " - | " + str(buffer[0]) + " | -> " + str(buffer[1]) + " -> " + str(buffer[2]) + " -> " + str(buffer[3] + "         "), end="\r")
+            beatIndex += 1
+            buffer.pop(0)
+            buffer.append(chords[beatIndex+3] if beatIndex + 3 < len(chords) else "--")
+            playBackclick.play()
 
 def main():
-    '''pathTempSong = './tempSong'
+    
+    pathTempSong = './tempSong'
     pathImages = './tempChromagrams'
     songName = "songTemp.wav"
 
@@ -74,33 +132,17 @@ def main():
     proc = madmom.features.beats.DBNBeatTrackingProcessor(fps=100)
     act = madmom.features.beats.RNNBeatProcessor()(pathTempSong + "/" + songName)
     beat_times = proc(act)
-
+    
     print("Generating chroma")
     dcp = madmom.audio.chroma.DeepChromaProcessor()
     chroma = dcp(pathTempSong + "/" + songName)
 
     print("Cut chroma")
-    generatePartChromagrams(chroma, beat_times, pathImages)'''
+    generatePartChromagrams(chroma, beat_times, pathImages)
+    
+    print("Get chords from model")
+    chords = getChords(beat_times)
 
-    print("model")
-    new_model = tf.keras.models.load_model('./saved_model')
-    sunflower_url = "./tempChromagrams/8.38.png"
-    #sunflower_path = tf.keras.utils.get_file('Red_sunflower', origin=sunflower_url)
-
-    img = tf.keras.utils.load_img(
-        sunflower_url, target_size=(480, 640)
-    )
-    img_array = tf.keras.utils.img_to_array(img)
-    img_array = tf.expand_dims(img_array, 0) # Create a batch
-
-    predictions = new_model.predict(img_array)
-    score = tf.nn.softmax(predictions[0])
-    print("score", score)
-
-    class_names = ['A#_maj', 'A_maj', 'A_min', 'Ab_min', 'B_maj', 'B_min', 'Bb_min', 'C#_maj', 'C#_min', 'C_maj', 'C_min', 'D#_maj', 'D#_min', 'D_maj', 'D_min', 'E_maj', 'E_min', 'F#_maj', 'F#_min', 'F_maj', 'F_min', 'G#_maj', 'G_maj', 'G_min', 'N']
-    print(
-        "This image most likely belongs to {} with a {:.2f} percent confidence."
-        .format(class_names[np.argmax(score)], 100 * np.max(score))
-    )
+    deploySong(beat_times, chords)
 
 main()

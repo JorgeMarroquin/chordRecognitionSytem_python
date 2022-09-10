@@ -4,17 +4,21 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import cv2
 import os
+import json
+tf.config.list_physical_devices('GPU')
 
 train = ImageDataGenerator(rescale=1/255)
 test = ImageDataGenerator(rescale=1/255)
 
-print("Image Shape", cv2.imread("./chromagrams/train/A_min/25_38.png").shape)
+print("Image Shape", cv2.imread("./assets/cmaj.png").shape)
 
-train_dataset = train.flow_from_directory("./chromagrams/train", batch_size=3, class_mode='binary', target_size=(480, 640))
-test_dataset = test.flow_from_directory("./chromagrams/test", batch_size=3, class_mode='binary', target_size=(480, 640))
+train_dataset = train.flow_from_directory("./chromagramDataset/train", batch_size=3, class_mode='binary', target_size=(480, 640))
+test_dataset = test.flow_from_directory("./chromagramDataset/test", batch_size=3, class_mode='binary', target_size=(480, 640))
+
 print(train_dataset.class_indices)
-print(train_dataset.class_indices.keys())
-print(train_dataset.classes)
+json_object = json.dumps(train_dataset.class_indices, indent=4)
+with open("class_indices.json", "w") as outfile:
+    outfile.write(json_object)
 
 model = models.Sequential()
 model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(480, 640, 3)))
@@ -33,7 +37,7 @@ model.compile(optimizer='adam',
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
               metrics=['accuracy'])
 
-history = model.fit(train_dataset, steps_per_epoch=3, epochs=1000, validation_data=test_dataset)
+history = model.fit(train_dataset, steps_per_epoch=3, epochs=50, validation_data=test_dataset)
 
 if(not os.path.exists("./saved_model")):
     os.mkdir("./saved_model")
@@ -44,5 +48,4 @@ plt.plot(history.history['val_accuracy'], label = 'val_accuracy')
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
 plt.legend(loc='lower right')
-
-plt.show()
+plt.savefig("lastModelAccuracy.png")
