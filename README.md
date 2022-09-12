@@ -35,7 +35,11 @@ And this is how chromagrams will be saved in chromagrams folder to load in model
 
 ![Chromagram chord](./assets/25PartChroma.png)
 
-## Run model
-Use main.py to run model, this just need chromagrams folder.
+## Generate model
+Use main.py to generate a model, this just need chromagrams folder.
 
+> `py generateModel.py`
+
+## Use service
+To play a song or save a file with the chords, you can use:
 > `py main.py`

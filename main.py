@@ -1,16 +1,17 @@
-from time import sleep
+from email.headerregistry import BaseHeader
+from logging import root
 import matplotlib
 import numpy as np
 import madmom
 import tensorflow as tf
 import os
 import shutil
-import IPython.display as ipd
 import subprocess
 import pytube
 import json
-import time
-import keyboard
+import jams
+from tkinter import * 
+from tkinter.filedialog import asksaveasfile
 from just_playback import Playback
 from tqdm import tqdm
 from moviepy.editor import *
@@ -23,6 +24,7 @@ def downloadSongFromYoutube(url):
     try:
         #get youtube video
         yt = pytube.YouTube(url)
+        print(yt.length)
         vids= yt.streams.all()
         downloadDir = "./tempSong"
         default_filename = vids[2].default_filename.replace(" ", "_")
@@ -33,13 +35,15 @@ def downloadSongFromYoutube(url):
         command = "ffmpeg -i " + downloadDir + "/" + default_filename + " -ab 160k -ac 2 -ar 44100 -vn " + downloadDir + "/songTemp.wav"
         subprocess.call(command, shell=True)
         os.remove(downloadDir + "/" + default_filename)
+        return yt.length, vids[2].default_filename[:-4]
     except Exception as e:
         print("Can't download or convert video")
 
-def generatePartChromagrams(chroma, beatArray, savePath):
+def generatePartChromagrams(chroma, beatList, savePath, endSecond):
     if(not os.path.exists(savePath)):
         os.mkdir(savePath)
-
+    beatArray = beatList.tolist()
+    beatArray.append(endSecond)
     loop = tqdm(total=len(beatArray), position=0, leave=False)
     for index, a in enumerate(beatArray):
         loop.set_description("".format(index))
@@ -68,14 +72,14 @@ def getChords(beats):
     with open('class_indices.json', 'r') as openfile:
         json_object = json.load(openfile)
     class_names = list(json_object.keys())
-    for index, element in enumerate(class_names):
-        class_names[index] = element.replace("_maj", "").replace("_min", "m")
 
+    originalChords = []
     chords = []
+    scores = []
     new_model = tf.keras.models.load_model('./saved_model')
 
     loop = tqdm(total=len(beats), position=0, leave=False)
-    for index, chroma  in enumerate(beats[:-1].copy()):
+    for index, chroma  in enumerate(beats.copy()):
         
         chroma_url = "./tempChromagrams/" + str(chroma) + ".png"
 
@@ -88,12 +92,39 @@ def getChords(beats):
         
         loop.set_description((str(class_names[np.argmax(score)]) + " " + "Score: " + str(100 * np.max(score))).format(index))
         loop.update(1)
-        chords.append(class_names[np.argmax(score)])
+        chords.append(class_names[np.argmax(score)].replace("_maj", "").replace("_min", "m"))
+        originalChords.append(class_names[np.argmax(score)].replace("_", ":"))
+        scores.append(np.max(score))
     loop.close
-    return chords
+    return chords, scores, originalChords
 
+def saveFileChords(beats, chords, originalChords, score, title, url, duration):
+    root = Tk()
+    root.geometry('200x150')
+    files = [('JSON', '*.json'), ('jams', '*.jams')]
+    file = asksaveasfile(filetypes = files, defaultextension = files)
+    if(file == None):
+        return
+    if file.name[-4:] == "json":
+        jsonFile = {}
+        for index, b in enumerate(beats):
+            jsonFile[str(b)] = {"value": str(chords[index]), "score": str(score[index])}
+        print(file.name[-4:])
+        file.write(json.dumps(jsonFile, indent=4))
+    elif file.name[-4:] == "jams":
+        jam = jams.JAMS()
+        jam.file_metadata.duration = duration
+        ann = jams.Annotation(namespace='chord', time=0, duration=jam.file_metadata.duration)
+        for index, b in enumerate(beats):
+            deltaDuration = beats[index + 1] + 1 if index + 1 < len(beats) else duration
+            ann.append(time=b, duration=(deltaDuration - b), confidence=score[index], value=originalChords[index])
+        ann.annotation_metadata = jams.AnnotationMetadata(data_source='https://github.com/JorgeMarroquin/chordRecognitionSytem_python')
+        jam.file_metadata.identifiers = {"youtube_url": url}
+        jam.file_metadata.title = title
+        jam.annotations.append(ann)
+        jam.save(file.name)
 
-def deploySong(beats, chords):
+def deploySong(beats, chords, title):
     beatIndex = 0
     buffer = ["--", "--", "--", "--"]
     for index, e in enumerate(buffer):
@@ -104,6 +135,7 @@ def deploySong(beats, chords):
     playBackclick = Playback()
     playback.load_file('./tempSong/songTemp.wav')
     playBackclick.load_file('./assets/click.wav')
+    print("Now playing: ", title)
     playback.play()
     while(beatIndex < len(chords)):
         if(round(playback.curr_pos, 2) == beats[beatIndex]):
@@ -126,7 +158,7 @@ def main():
 
     print("Downloading and converting link")
     url = input("Paste youtube link: \n")
-    downloadSongFromYoutube(url)
+    songLenght , title = downloadSongFromYoutube(url)
 
     print("Generating beats")
     proc = madmom.features.beats.DBNBeatTrackingProcessor(fps=100)
@@ -138,11 +170,14 @@ def main():
     chroma = dcp(pathTempSong + "/" + songName)
 
     print("Cut chroma")
-    generatePartChromagrams(chroma, beat_times, pathImages)
+    generatePartChromagrams(chroma, beat_times, pathImages, songLenght)
     
     print("Get chords from model")
-    chords = getChords(beat_times)
+    chords, scores, originalChords = getChords(beat_times)
 
-    deploySong(beat_times, chords)
+    desition = input("Do you want to save chords in a file: [Y/N] ")
+    if(desition == "y" or desition == "Y"):
+        saveFileChords(beat_times, chords, originalChords, scores, title, url, songLenght)
+    deploySong(beat_times, chords, title)
 
 main()
