@@ -10,6 +10,7 @@
 - opencv-python
 - pytube
 - just_playback
+- mutagen
 
 To convert video to wav file need [ffmpeg](https://ffmpeg.org/download.html).
 

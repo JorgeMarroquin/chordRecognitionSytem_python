@@ -37,7 +37,7 @@ model.compile(optimizer='adam',
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
               metrics=['accuracy'])
 
-history = model.fit(train_dataset, steps_per_epoch=3, epochs=50, validation_data=test_dataset)
+history = model.fit(train_dataset, steps_per_epoch=3, epochs=65, validation_data=test_dataset)
 
 if(not os.path.exists("./saved_model")):
     os.mkdir("./saved_model")

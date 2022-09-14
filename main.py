@@ -1,3 +1,4 @@
+from distutils.cmd import Command
 from email.headerregistry import BaseHeader
 from logging import root
 import matplotlib
@@ -10,8 +11,10 @@ import subprocess
 import pytube
 import json
 import jams
+from mutagen.wave import WAVE
 from tkinter import * 
 from tkinter.filedialog import asksaveasfile
+from tkinter.filedialog import askopenfilename
 from just_playback import Playback
 from tqdm import tqdm
 from moviepy.editor import *
@@ -27,17 +30,29 @@ def downloadSongFromYoutube(url):
         print(yt.length)
         vids= yt.streams.all()
         downloadDir = "./tempSong"
-        default_filename = vids[2].default_filename.replace(" ", "_")
+        default_filename = vids[1].default_filename.replace(" ", "_").replace("(", "").replace(")", "")
         default_filename = default_filename.replace("&", "and")
-        vids[2].download(downloadDir, default_filename)
+        vids[1].download(downloadDir, default_filename)
         print(default_filename)
         #convert to wav
-        command = "ffmpeg -i " + downloadDir + "/" + default_filename + " -ab 160k -ac 2 -ar 44100 -vn " + downloadDir + "/songTemp.wav"
+        command = "ffmpeg -i " + downloadDir + "/" + default_filename + " -ac 2 -f wav " + downloadDir + "/songTemp.wav"
         subprocess.call(command, shell=True)
         os.remove(downloadDir + "/" + default_filename)
-        return yt.length, vids[2].default_filename[:-4]
+        return yt.length, vids[1].default_filename[:-4]
     except Exception as e:
         print("Can't download or convert video")
+
+def convertLocalFile():
+    if(not os.path.exists("./tempSong")):
+        os.mkdir("./tempSong")
+    root = Tk()
+    root.geometry('200x150')
+    file = askopenfilename(filetypes= (("mp3","*.mp3"), ("mp4","*.mp4"), ("wav","*.wav")))
+    root.destroy()
+    command = 'ffmpeg -i "' + file + '" ./tempSong/songTemp.wav'
+    subprocess.call(command, shell=True)
+    audio = WAVE("./tempSong/songTemp.wav")
+    return audio.info.length, os.path.basename(file)
 
 def generatePartChromagrams(chroma, beatList, savePath, endSecond):
     if(not os.path.exists(savePath)):
@@ -103,6 +118,7 @@ def saveFileChords(beats, chords, originalChords, score, title, url, duration):
     root.geometry('200x150')
     files = [('JSON', '*.json'), ('jams', '*.jams')]
     file = asksaveasfile(filetypes = files, defaultextension = files)
+    root.destroy()
     if(file == None):
         return
     if file.name[-4:] == "json":
@@ -124,7 +140,7 @@ def saveFileChords(beats, chords, originalChords, score, title, url, duration):
         jam.annotations.append(ann)
         jam.save(file.name)
 
-def deploySong(beats, chords, title):
+def playSong(beats, chords, title):
     beatIndex = 0
     buffer = ["--", "--", "--", "--"]
     for index, e in enumerate(buffer):
@@ -156,9 +172,18 @@ def main():
     if(os.path.exists(pathImages)):
         shutil.rmtree(pathImages)
 
-    print("Downloading and converting link")
-    url = input("Paste youtube link: \n")
-    songLenght , title = downloadSongFromYoutube(url)
+    print("===================")
+    print("YouTube Url: 1")
+    print("Local File:  2")
+    fileSrc = input("Select an option: ")
+    if fileSrc == "1":
+        url = input("Paste youtube link: ")
+        songLenght , title = downloadSongFromYoutube(url)
+    elif fileSrc == "2":
+        songLenght , title = convertLocalFile()
+    else:
+        print("Exit")
+        return
 
     print("Generating beats")
     proc = madmom.features.beats.DBNBeatTrackingProcessor(fps=100)
@@ -175,9 +200,22 @@ def main():
     print("Get chords from model")
     chords, scores, originalChords = getChords(beat_times)
 
-    desition = input("Do you want to save chords in a file: [Y/N] ")
-    if(desition == "y" or desition == "Y"):
-        saveFileChords(beat_times, chords, originalChords, scores, title, url, songLenght)
-    deploySong(beat_times, chords, title)
+    loopMenu = True
+    while loopMenu:
+        print("===================")
+        print("Save chords: 1")
+        print("Play song:  2")
+        print("Exit:       3")
+        
+        menuOption = input("Select an option: ")
+        if(menuOption == "1"):
+            saveFileChords(beat_times, chords, originalChords, scores, title, url, songLenght)
+        elif(menuOption == "2"):
+            playSong(beat_times, chords, title)
+        elif(menuOption == "3"):
+            print("Exit")
+            loopMenu = False
+        else:
+            print("Option " + menuOption + " not recogniced")
 
 main()
