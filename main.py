@@ -1,6 +1,8 @@
 from distutils.cmd import Command
 from email.headerregistry import BaseHeader
 from logging import root
+import time
+import keyboard
 import matplotlib
 import numpy as np
 import madmom
@@ -153,7 +155,10 @@ def playSong(beats, chords, title):
     playBackclick.load_file('./assets/click.wav')
     print("Now playing: ", title)
     playback.play()
+    isPlaying = True
     while(beatIndex < len(chords)):
+        if(keyboard.is_pressed("esc")):
+            return
         if(round(playback.curr_pos, 2) == beats[beatIndex]):
             print("    " + str(round(playback.curr_pos, 2)) + " - | " + str(buffer[0]) + " | -> " + str(buffer[1]) + " -> " + str(buffer[2]) + " -> " + str(buffer[3] + "         "), end="\r")
             beatIndex += 1
